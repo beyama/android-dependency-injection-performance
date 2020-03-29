@@ -9,6 +9,8 @@ import com.sloydev.dependencyinjectionperformance.katana.katanaJavaModule
 import com.sloydev.dependencyinjectionperformance.katana.katanaKotlinModule
 import com.sloydev.dependencyinjectionperformance.koin.koinJavaModule
 import com.sloydev.dependencyinjectionperformance.koin.koinKotlinModule
+import com.sloydev.dependencyinjectionperformance.winter.winterJavaComponent
+import com.sloydev.dependencyinjectionperformance.winter.winterKotlinComponent
 import org.kodein.di.Kodein
 import org.kodein.di.direct
 import org.kodein.di.erased.instance
@@ -29,6 +31,7 @@ class InjectionTest : KoinComponent {
     fun runTests(): List<LibraryResult> {
         val benchmarks = listOf(
             koinTest(),
+            winterTest(),
             kodeinTest(),
             katanaTest(),
             customTest(),
@@ -71,6 +74,20 @@ class InjectionTest : KoinComponent {
             { startKoin { modules(koinJavaModule) } },
             { get<FibonacciJava.Fib8>() },
             { stopKoin() }
+        )
+    )
+
+    private fun winterTest() = LibraryBenchmark(
+        injectorName = "Winter",
+        kotlinBenchmark = VariantBenchmark(
+            { winterKotlinComponent.createGraph() },
+            { it.instance<Fib8>() },
+            { it.close() }
+        ),
+        javaBenchmark = VariantBenchmark(
+            { winterJavaComponent.createGraph() },
+            { it.instance<FibonacciJava.Fib8>() },
+            { it.close() }
         )
     )
 
