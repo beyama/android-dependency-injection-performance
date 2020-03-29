@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity() {
         log("Library | Setup Kotlin | Setup Java | Inject Kotlin | Inject Java\n")
         log("--- | ---:| ---:| ---:| ---:\n")
         results.forEach {
-            log("**${it.injectorName}** | ${it[Variant.KOTLIN].startupTime.median().format()} | ${it[Variant.JAVA].startupTime.median().format()}  | ${it[Variant.KOTLIN].injectionTime.median().format()} | ${it[Variant.JAVA].injectionTime.median().format()}\n")
+            log("**${it.injectorName}** | ${it.kotlinResult.startupTime.median().toMilliseconds().format()} | ${it.javaResult.startupTime.median().toMilliseconds().format()}  | ${it.kotlinResult.injectionTime.median().toMilliseconds().format()} | ${it.javaResult.injectionTime.median().toMilliseconds().format()}\n")
         }
     }
 
@@ -57,10 +57,10 @@ class MainActivity : AppCompatActivity() {
         results.forEach { result ->
             table += row(
                 nameCell(result.injectorName),
-                timeCell(result[Variant.JAVA].startupTime.median()),
-                timeCell(result[Variant.KOTLIN].startupTime.median()),
-                timeCell(result[Variant.JAVA].injectionTime.median()),
-                timeCell(result[Variant.KOTLIN].injectionTime.median())
+                timeCell(result.javaResult.startupTime.median().toMilliseconds()),
+                timeCell(result.kotlinResult.startupTime.median().toMilliseconds()),
+                timeCell(result.javaResult.injectionTime.median().toMilliseconds()),
+                timeCell(result.kotlinResult.injectionTime.median().toMilliseconds())
             )
         }
 

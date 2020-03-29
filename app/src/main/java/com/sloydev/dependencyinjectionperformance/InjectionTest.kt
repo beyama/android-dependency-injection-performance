@@ -1,13 +1,10 @@
 package com.sloydev.dependencyinjectionperformance
 
-import android.os.Build
 import com.sloydev.dependencyinjectionperformance.custom.DIContainer
 import com.sloydev.dependencyinjectionperformance.custom.customJavaModule
 import com.sloydev.dependencyinjectionperformance.custom.customKotlinModule
 import com.sloydev.dependencyinjectionperformance.dagger2.DaggerJavaDaggerComponent
 import com.sloydev.dependencyinjectionperformance.dagger2.DaggerKotlinDaggerComponent
-import com.sloydev.dependencyinjectionperformance.dagger2.JavaDaggerComponent
-import com.sloydev.dependencyinjectionperformance.dagger2.KotlinDaggerComponent
 import com.sloydev.dependencyinjectionperformance.katana.katanaJavaModule
 import com.sloydev.dependencyinjectionperformance.katana.katanaKotlinModule
 import com.sloydev.dependencyinjectionperformance.koin.koinJavaModule
@@ -19,10 +16,6 @@ import org.koin.core.KoinComponent
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.core.get
-import org.rewedigital.katana.Component
-import org.rewedigital.katana.Katana
-import org.rewedigital.katana.android.environment.AndroidEnvironmentContext
-import org.rewedigital.katana.android.environment.AndroidEnvironmentContext.Profile.SPEED
 import org.rewedigital.katana.createComponent
 import javax.inject.Inject
 
@@ -34,118 +27,108 @@ class InjectionTest : KoinComponent {
     private val rounds = 100
 
     fun runTests(): List<LibraryResult> {
-        val results = listOf(
+        val benchmarks = listOf(
             koinTest(),
             kodeinTest(),
             katanaTest(),
             customTest(),
             daggerTest()
         )
-        reportMarkdown(results)
-        return results
-    }
+        // reportMarkdown(results)
 
+        repeat(rounds) {
+            benchmarks.forEach {
+                it.kotlinBenchmark.run()
+                it.javaBenchmark.run()
+            }
+        }
 
-
-    private fun runTest(
-        setup: () -> Unit,
-        test: () -> Unit,
-        teardown: () -> Unit = {}
-    ): TestResult {
-        val startup = (1..rounds).map { measureTime { setup() }.also { teardown() } }
-        setup()
-
-        val testDurations = (1..rounds).map { measureTime { test() } }
-        teardown()
-        return TestResult(startup, testDurations)
-    }
-
-    private fun koinTest(): LibraryResult {
-        log("Running Koin...")
-        return LibraryResult("Koin", mapOf(
-            Variant.KOTLIN to runTest(
-                setup = {
-                    startKoin {
-                        modules(koinKotlinModule)
-                    }
-                },
-                test = { get<Fib8>() },
-                teardown = { stopKoin() }
-            ),
-            Variant.JAVA to runTest(
-                setup = {
-                    startKoin {
-                        modules(koinJavaModule)
-                    }
-                },
-                test = { get<FibonacciJava.Fib8>() },
-                teardown = { stopKoin() }
+        return benchmarks.map {
+            LibraryResult(
+                injectorName = it.injectorName,
+                kotlinResult = TestResult(
+                    startupTime = it.kotlinBenchmark.setupTimes,
+                    injectionTime = it.kotlinBenchmark.injectionTimes,
+                    teardownTime = it.kotlinBenchmark.teardownTimes
+                ),
+                javaResult = TestResult(
+                    startupTime = it.javaBenchmark.setupTimes,
+                    injectionTime = it.javaBenchmark.injectionTimes,
+                    teardownTime = it.javaBenchmark.teardownTimes
+                )
             )
-        ))
+        }
     }
 
-    private fun kodeinTest(): LibraryResult {
-        log("Running Kodein...")
-        lateinit var kodein: Kodein
-        return LibraryResult("Kodein", mapOf(
-            Variant.KOTLIN to runTest(
-                setup = { kodein = Kodein { import(kodeinKotlinModule) } },
-                test = { kodein.direct.instance<Fib8>() }
-            ),
-            Variant.JAVA to runTest(
-                setup = { kodein = Kodein { import(kodeinKotlinModule) } },
-                test = { kodein.direct.instance<Fib8>() }
-            )
-        ))
-    }
+    private fun koinTest() = LibraryBenchmark(
+        injectorName = "Koin",
+        kotlinBenchmark = VariantBenchmark(
+            { startKoin { modules(koinKotlinModule) } },
+            { get<Fib8>() },
+            { stopKoin() }
+        ),
+        javaBenchmark = VariantBenchmark(
+            { startKoin { modules(koinJavaModule) } },
+            { get<FibonacciJava.Fib8>() },
+            { stopKoin() }
+        )
+    )
 
-    private fun katanaTest(): LibraryResult {
-        log("Running Katana...")
-        Katana.environmentContext = AndroidEnvironmentContext(profile = SPEED)
-        lateinit var component: Component
-        return LibraryResult("Katana", mapOf(
-            Variant.KOTLIN to runTest(
-                setup = { component = createComponent(modules = listOf(katanaKotlinModule)) },
-                test = { component.injectNow<Fib8>() }
-            ),
-            Variant.JAVA to runTest(
-                setup = { component = createComponent(modules = listOf(katanaJavaModule)) },
-                test = { component.injectNow<FibonacciJava.Fib8>() }
-            )
-        ))
-    }
+    private fun kodeinTest() = LibraryBenchmark(
+        injectorName = "Kodein",
+        kotlinBenchmark = VariantBenchmark(
+            { Kodein { import(kodeinKotlinModule) } },
+            { it.direct.instance<Fib8>() },
+            {}
+        ),
+        javaBenchmark = VariantBenchmark(
+            { Kodein { import(kodeinJavaModule) } },
+            { it.direct.instance<FibonacciJava.Fib8>() },
+            {}
+        )
+    )
 
-    private fun customTest(): LibraryResult {
-        log("Running Custom...")
-        return LibraryResult("Custom", mapOf(
-            Variant.KOTLIN to runTest(
-                setup = { DIContainer.loadModule(customKotlinModule) },
-                test = { DIContainer.get<Fib8>() },
-                teardown = { DIContainer.unloadModules() }
-            ),
-            Variant.JAVA to runTest(
-                setup = { DIContainer.loadModule(customJavaModule) },
-                test = { DIContainer.get<FibonacciJava.Fib8>() },
-                teardown = { DIContainer.unloadModules() }
-            )
-        ))
-    }
+    private fun katanaTest() = LibraryBenchmark(
+        injectorName = "Katana",
+        kotlinBenchmark = VariantBenchmark(
+            { createComponent(modules = listOf(katanaKotlinModule)) },
+            { it.injectNow<Fib8>() },
+            {}
+        ),
+        javaBenchmark = VariantBenchmark(
+            { createComponent(modules = listOf(katanaJavaModule)) },
+            { it.injectNow<FibonacciJava.Fib8>() },
+            {}
+        )
+    )
 
-    private fun daggerTest(): LibraryResult {
-        log("Running Dagger...")
-        lateinit var kotlinComponent: KotlinDaggerComponent
-        lateinit var javaComponent: JavaDaggerComponent
-        return LibraryResult("Dagger", mapOf(
-            Variant.KOTLIN to runTest(
-                setup = { kotlinComponent = DaggerKotlinDaggerComponent.create() },
-                test = { kotlinComponent.inject(kotlinDaggerTest) }
-            ),
-            Variant.JAVA to runTest(
-                setup = { javaComponent = DaggerJavaDaggerComponent.create() },
-                test = { javaComponent.inject(javaDaggerTest) }
-            )
-        ))
-    }
+    private fun customTest() = LibraryBenchmark(
+        injectorName = "Custom",
+        kotlinBenchmark = VariantBenchmark(
+            { DIContainer.loadModule(customKotlinModule) },
+            { DIContainer.get<Fib8>() },
+            { DIContainer.unloadModules() }
+        ),
+        javaBenchmark = VariantBenchmark(
+            { DIContainer.loadModule(customJavaModule) },
+            { DIContainer.get<FibonacciJava.Fib8>() },
+            { DIContainer.unloadModules() }
+        )
+    )
+
+    private fun daggerTest() = LibraryBenchmark(
+        injectorName = "Dagger",
+        kotlinBenchmark = VariantBenchmark(
+            { DaggerKotlinDaggerComponent.create() },
+            { it.inject(kotlinDaggerTest) },
+            {}
+        ),
+        javaBenchmark = VariantBenchmark(
+            { DaggerJavaDaggerComponent.create() },
+            { it.inject(javaDaggerTest) },
+            {}
+        )
+    )
 
     class KotlinDaggerTest {
         @Inject
